@@ -1,0 +1,7 @@
+PySide6==6.8.1
+Nuitka==2.5.9
+Pillow==11.0.0
+httpx==0.28.1
+psutil==6.1.1
+ordered-set==4.1.0
+zstandard==0.23.0
