@@ -3,31 +3,17 @@ from __future__ import annotations
 import re
 
 from prompt_master.core.models import PromptRequest
-
-
-SYSTEM = """You are Prompt Master LD. Produce only a production-ready LTX-Video 2.3 positive prompt. Describe subject identity, action, environment, lighting, cinematography, camera motion, temporal continuity, and synchronized audio. Never explain your work, use markdown, or emit a negative prompt."""
+from .brain import SYSTEM, directive
+from .imaging import multimodal_content
+from .negative import terms as negative_terms
 
 
 class PromptEngine:
     def build_messages(self, request: PromptRequest) -> list[dict]:
-        details = (
-            f"Create a {request.seconds:g}-second {request.video_mode} prompt at {request.fps} fps, "
-            f"{request.output_width}x{request.output_height}. Intent: {request.intent}\n"
-            f"Style: {request.style}; camera: {request.camera}; transition: {request.transition}; POV: {request.pov}; "
-            f"dialogue amount: {request.dialogue}%; accent: {request.accent} ({request.accent_strength}%); "
-            f"wardrobe: {request.wardrobe or 'unspecified'}; music: {request.music}; lexicon: {request.lexicon}; "
-            f"format: {request.output_format}. Maintain coherent motion and identity across every frame."
-        )
-        content: str | list[dict]
-        if request.image_data_url:
-            content = [{"type": "image_url", "image_url": {"url": request.image_data_url}}, {"type": "text", "text": details}]
-        else:
-            content = details
-        return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": content}]
+        return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": multimodal_content(directive(request), request.image_data_url)}]
 
     def build_base_negative(self, request: PromptRequest) -> str:
-        terms = ["low quality", "blurry", "compression artifacts", "flicker", "temporal inconsistency", "identity drift", "deformed anatomy", "extra limbs", "bad hands", "warped face", "text", "watermark", "logo"]
-        if request.video_mode == "I2V": terms += ["reference image mismatch", "unmotivated scene change"]
+        terms = negative_terms(request.image_data_url is not None or request.video_mode == "I2V")
         return self._dedupe(terms + self._terms(request.negative_extra))
 
     def max_tokens(self, request: PromptRequest) -> int:

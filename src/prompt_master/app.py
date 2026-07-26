@@ -7,8 +7,8 @@ from prompt_master.ui.setup_wizard import SetupWizard
 
 
 def main() -> int:
-    paths=AppPaths.discover(); paths.create_managed_dirs(); app=QApplication(sys.argv); app.setApplicationName("Prompt Master Standalone"); window=MainWindow()
-    if "--setup" in sys.argv: SetupWizard(window).exec()
+    paths=AppPaths.discover(); paths.create_managed_dirs(); app=QApplication(sys.argv); app.setApplicationName("Prompt Master Standalone"); window=MainWindow(paths)
+    if "--setup" in sys.argv: SetupWizard(paths,window).exec()
     window.show(); return app.exec()
 
 
