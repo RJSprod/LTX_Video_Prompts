@@ -11,6 +11,27 @@
 
 Windows Qt desktop client which provisions a pinned `llama.cpp`/Gemma runtime and creates LTX-Video 2.3 prompts. Models and runtimes remain beneath the user-selected installation root.
 
+## Prompt engine
+
+The prompt engine is a direct port of [Prompt Master LD](https://github.com/Brojakhoeman/Prompt-Master-LD),
+not a reimplementation. The upstream modules are vendored under
+`src/prompt_master/prompt_engine/upstream/`; 14 of the 15 are byte-identical,
+and the single approved difference is recorded in `UPSTREAM_DIFF_NOTES.md`.
+
+`prompt_engine/adapter.py` is a thin translation layer — it contains no prompt
+text. `prompt_engine/options.py` builds every UI dropdown from the upstream
+constants, so a control cannot drift from the engine that consumes its value:
+47 accents, 35 music genres, 20 visual styles, 10 cameras, 10 transitions, 3
+accent strengths and 3 output formats.
+
+Parity is enforced by three checks — see `PARITY_REPORT.md` for the numbers:
+
+```bash
+python -m pytest tests/                                        # ported upstream self-test
+python tools/compare_upstream_engine.py --upstream <checkout>  # output-level parity
+python tools/check_upstream_sync.py     --upstream <checkout>  # file-level integrity
+```
+
 ## Development
 
 Requires Python 3.12. Create a development virtual environment, install with `pip install -e .`, and run `prompt-master`. The release build is produced on Windows with `build/build.ps1`; it uses `pyside6-deploy` in directory mode and Inno Setup.
