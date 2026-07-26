@@ -8,11 +8,12 @@ from urllib.parse import urlparse
 
 @dataclass(frozen=True)
 class Component:
-    component_id: str; url: str; destination: str; size: int; sha256: str; version: str
+    component_id: str; url: str; destination: str; size: int | None; sha256: str; version: str
 
     def validate(self) -> None:
         if urlparse(self.url).scheme != "https": raise ValueError(f"{self.component_id}: HTTPS URL required")
-        if self.size <= 0 or len(self.sha256) != 64: raise ValueError(f"{self.component_id}: incomplete size or SHA-256")
+        if self.size is not None and self.size <= 0: raise ValueError(f"{self.component_id}: invalid size")
+        if len(self.sha256) != 64: raise ValueError(f"{self.component_id}: incomplete SHA-256")
         if "latest" in self.url.casefold(): raise ValueError(f"{self.component_id}: unpinned latest URL")
 
 
