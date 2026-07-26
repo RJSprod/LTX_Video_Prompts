@@ -6,7 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "prompt-master-standalone"
 version = "1.0.0"
 requires-python = ">=3.12"
-dependencies = ["PySide6==6.8.1", "Pillow==11.0.0", "httpx==0.28.1", "psutil==6.1.1"]
+# numpy is required by the vendored upstream imaging.py: style_hint() uses it
+# for the flat-cel detector that hardens the I2V cartoon medium law.
+dependencies = ["PySide6==6.8.1", "Pillow==11.0.0", "httpx==0.28.1", "psutil==6.1.1", "numpy==2.2.1"]
 
 [project.scripts]
 prompt-master = "prompt_master.app:main"

@@ -102,12 +102,13 @@ class SetupWizard(QWizard):
         shutil.copy2(self.paths.data/"setup-state.pending.json",self.paths.data/"setup-state.json")
         service=InferenceService(self.paths)
         try:
-            client=service.client(); engine=PromptEngine(); request=PromptRequest("A red ball rolls across a wooden table",smart_negative=False)
-            if not client.stream_chat(engine.build_messages(request),64,1,lambda _:None).strip(): raise RuntimeError("Text validation returned no content")
+            client=service.client(); engine=PromptEngine()
+            text_probe=PromptRequest("A red ball rolls across a wooden table",video_mode="t2v",smart_negative=False)
+            if not client.stream_chat(engine.build(text_probe).messages,64,1,lambda _:None).strip(): raise RuntimeError("Text validation returned no content")
             from PIL import Image
             probe=self.paths.cache/"temp-images"/"setup-probe.jpg"; Image.new("RGB",(32,32),(220,30,30)).save(probe)
-            request.image_data_url=image_data_url(probe)
-            if not client.stream_chat(engine.build_messages(request),64,1,lambda _:None).strip(): raise RuntimeError("Image validation returned no content")
+            image_probe=PromptRequest("A red ball rolls across a wooden table",video_mode="i2v",image_data_url=image_data_url(probe),image_name=probe.name,smart_negative=False)
+            if not client.stream_chat(engine.build(image_probe).messages,64,1,lambda _:None).strip(): raise RuntimeError("Image validation returned no content")
         except Exception:
             (self.paths.data/"setup-state.json").unlink(missing_ok=True); raise
         finally: service.stop(); (self.paths.data/"setup-state.pending.json").unlink(missing_ok=True)

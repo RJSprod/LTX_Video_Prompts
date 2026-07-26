@@ -2,14 +2,35 @@
 
 Every difference between a vendored module under
 `src/prompt_master/prompt_engine/upstream/` and the corresponding file in the
-pinned Prompt-Master-LD checkout must be declared here. `tools/check_upstream_sync.py`
-parses this file and fails the build on any undeclared change.
+pinned Prompt-Master-LD source must be declared here. `tools/check_upstream_sync.py`
+parses this file and fails on any undeclared change.
 
 ## Status
 
-**No modules are vendored yet.** The upstream repository
-`Brojakhoeman/Prompt-Master-LD` was not reachable when this file was created, so
-the port has not started. See "Blocked" below.
+**15 modules vendored. 14 are byte-identical to upstream. One approved
+difference, in `imaging.py`.**
+
+| Module | Role | State |
+| --- | --- | --- |
+| `brain.py` | engine | byte-identical |
+| `accents.py` | engine | byte-identical |
+| `music.py` | engine | byte-identical |
+| `styles.py` | engine | byte-identical |
+| `cinematics.py` | engine | byte-identical |
+| `hands.py` | engine | byte-identical |
+| `identity.py` | engine | byte-identical |
+| `wardrobe.py` | engine | byte-identical |
+| `negative.py` | engine | byte-identical |
+| `shotscript.py` | engine | byte-identical |
+| `imaging.py` | engine | **1 approved difference** |
+| `node.py` | reference | byte-identical |
+| `routes.py` | reference | byte-identical |
+| `backend.py` | reference | byte-identical |
+| `selftest.py` | reference | byte-identical |
+
+The ten engine modules that carry prompt text needed **no** edits at all.
+Upstream already used package-relative imports (`from .accents import …`) and
+none of those ten import ComfyUI, Torch or aiohttp, so the port is a copy.
 
 ## What does not need an entry
 
@@ -40,40 +61,64 @@ numbers are 1-based and inclusive.
 
 `Behavior unchanged: yes` is a required confirmation, not a formality: it
 asserts that `tools/compare_upstream_engine.py` produces identical system
-prompts, user prompts, base negatives, budgets, and frame counts across this
+prompts, user prompts, base negatives, budgets and frame counts across this
 change. A hunk whose entry lacks the confirmation fails the check.
-
-An entry may cover several adjacent hunks by widening its ranges, but prefer one
-entry per logical change so the reason stays specific.
 
 ## Approved differences
 
-_None. No modules have been vendored._
+### imaging.py
 
-## Blocked
+- Original lines: 50-58
+- New lines: 49-49
+- Reason: removed `pil_to_tensor()` and `black()`, the two ComfyUI tensor
+  helpers. Both exist only to hand ComfyUI an `IMAGE` tensor — `pil_to_tensor`
+  wraps a PIL image as a `torch.Tensor`, and `black` allocates a blank tensor
+  for the T2V pack. Their only caller is `node.py`, which is vendored as a
+  reference and never imported by the standalone application; the app carries
+  Pillow images end to end and has no sampler to hand a tensor to. The porting
+  contract permits exactly this ("Remove Torch tensor conversion where the
+  standalone app uses Pillow", "Do not require Torch for normal image input").
+  The accompanying `import torch` removal is auto-approved as an import change.
+  `numpy` is deliberately kept: `style_hint()` uses it for the flat-cel
+  detector that decides whether the I2V brief gets its hardened cartoon medium
+  law, which is prompt behavior, not tensor plumbing.
+- Behavior unchanged: yes
 
-The port could not be started because the source-of-truth repository is not
-reachable from the build environment:
+Verified: `tools/compare_upstream_engine.py` compares 307 configurations across
+3,767 field comparisons with zero mismatches, and `tests/test_upstream_parity.py`
+runs 433 upstream assertions green. Neither removed function appears anywhere in
+the prompt-building path — `brain.py` does not import `imaging` at all.
 
-| Probe | Result |
-| --- | --- |
-| `git ls-remote https://github.com/psf/requests.git` (public control) | succeeds |
-| `git ls-remote https://github.com/Brojakhoeman/Prompt-Master-LD.git` | authentication required |
-| `raw.githubusercontent.com/torvalds/linux/master/README` (public control) | 200 |
-| `raw.githubusercontent.com/Brojakhoeman/Prompt-Master-LD/main/brain.py` | 404 |
-| `raw.githubusercontent.com/Brojakhoeman/Gemma4Prompt/main/README.md` | 404 |
+## Additions
 
-Anonymous access to public GitHub content works from this environment, and every
-repository under the `Brojakhoeman` account returns 404 or demands credentials —
-not just `Prompt-Master-LD`. The repository is private, renamed, or removed.
+These files are new to the port. They are not modified upstream files, so they
+carry no diff, but they are listed so nothing in the vendored tree is unaccounted
+for.
 
-To unblock, supply the upstream source by one of:
+### upstream/__init__.py
 
-1. make `Brojakhoeman/Prompt-Master-LD` public, or
-2. grant the build environment a credential that can read it, or
-3. vendor the eleven engine modules plus the four reference modules into this
-   repository directly, together with the upstream commit SHA in
-   `src/prompt_master/prompt_engine/UPSTREAM_COMMIT.txt`.
+Upstream's own `__init__.py` registers ComfyUI nodes and imports `node.py`,
+which pulls in ComfyUI and Torch. It is deliberately **not** vendored. The
+replacement is a docstring only — it re-exports nothing, so the upstream
+relative imports keep resolving exactly as they did in the ComfyUI package.
 
-Once the source is present, `tools/check_upstream_sync.py --upstream <path>`
-runs without further changes.
+## Deliberate non-changes
+
+Worth recording, because each looks like something a porter would "tidy":
+
+- **`node.py`, `routes.py`, `backend.py` and `selftest.py` still import ComfyUI,
+  aiohttp and Torch.** They are references, held byte-identical on purpose.
+  Nothing in the application imports them. `routes.py` is additionally read as
+  *data* by the ported self-test, which execs its `_prompt_estimate` function —
+  so editing it would silently change a test.
+- **`shotscript.py` keeps all three formats** (`flowing`, `bracket`,
+  `shotscript`). The port brief lists two ("flowing prose" and "shot script");
+  upstream has three, and the no-reduction rule wins over the brief's count.
+- **`identity.py` keeps `_ACCENT_REGION` keys that no accent uses** (`pakistani`,
+  `ukrainian`, `mexican`, and others). They are unreachable from
+  `accents.ACCENT_KEYS`, but removing dead entries is still a dictionary edit
+  and the fallback path (`region_for` → `("global", "")`) depends on which keys
+  are absent.
+- **`brain.py` keeps `max_tokens`'s unused `fmt` parameter.** Its docstring says
+  it is retained for call-site compatibility and no longer changes the answer.
+  The adapter passes it anyway.

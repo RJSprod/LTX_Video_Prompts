@@ -14,11 +14,12 @@ from prompt_master.provisioning.extractor import extract_zip_atomic, extract_zip
 
 def test_multimodal_and_negative_dedup(tmp_path):
     image=tmp_path/"x.png"; Image.new("RGB",(1000,500),"red").save(image); url=image_data_url(image)
-    request=PromptRequest("A runner",image_data_url=url,video_mode="I2V",negative_extra="logo, custom")
-    content=PromptEngine().build_messages(request)[1]["content"]
+    request=PromptRequest("A runner",image_data_url=url,video_mode="i2v",negative_extra="logo, custom")
+    content=PromptEngine().build(request).messages[1]["content"]
     image_part=next(part for part in content if part["type"]=="image_url")
     assert image_part["image_url"]["url"].startswith("data:image/jpeg;base64,")
-    negative=PromptEngine().build_base_negative(request); assert negative.lower().count("logo")==1 and "custom" in negative
+    # "logo" is already in upstream's core bank; upstream dedupe keeps one.
+    negative=PromptEngine().base_negative(request); assert negative.lower().count("logo")==1 and "custom" in negative
 
 
 def test_atomic_json(tmp_path):

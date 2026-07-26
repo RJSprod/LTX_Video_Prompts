@@ -235,6 +235,50 @@ def parse_notes(path: Path) -> tuple[list[Exception_], list[str]]:
     return exceptions, warnings
 
 
+def read_provenance(path: Path) -> tuple[str, dict[str, str], list[str]]:
+    """Read UPSTREAM_COMMIT.txt.
+
+    Accepts either a bare 40-character commit SHA (upstream arrived as a clone)
+    or the provenance form: a ``git-commit:`` line plus a ``sha256  filename``
+    manifest (upstream arrived as an archive, so there is no revision to pin and
+    the content is pinned instead).
+    """
+    if not path.exists():
+        return "", {}, [f"{path.name} is missing; the upstream revision is unrecorded"]
+
+    text = path.read_text(encoding="utf-8")
+    stripped = text.strip()
+    if re.fullmatch(r"[0-9a-f]{40}", stripped):
+        return stripped, {}, []
+
+    commit = ""
+    match = re.search(r"(?mi)^git-commit:\s*(\S+)\s*$", text)
+    if match:
+        commit = match.group(1)
+
+    manifest = {
+        name: digest
+        for digest, name in re.findall(r"(?m)^([0-9a-f]{64})\s+(\S+)\s*$", text)
+    }
+
+    warnings: list[str] = []
+    if not commit and not manifest:
+        warnings.append(
+            f"{path.name} records neither a commit SHA nor a digest manifest; "
+            f"the upstream source is unpinned"
+        )
+    elif commit.upper() == "UNKNOWN" and not manifest:
+        warnings.append(
+            f"{path.name} records no commit and no digests to pin instead"
+        )
+    elif commit.upper() == "UNKNOWN":
+        warnings.append(
+            f"{path.name} has no upstream commit SHA; pinned by content digest "
+            f"instead ({len(manifest)} files)"
+        )
+    return commit, manifest, warnings
+
+
 def parse_range(value: str) -> tuple[int, int]:
     value = value.strip()
     if value.lower() in {"none", "n/a", "-"}:
@@ -385,20 +429,22 @@ def main(argv: list[str] | None = None) -> int:
         for m in REFERENCE_MODULES
     ]
 
-    recorded_commit = (
-        args.commit_file.read_text(encoding="utf-8").strip()
-        if args.commit_file.exists()
-        else ""
-    )
-    if not recorded_commit:
-        warnings.append(
-            f"{args.commit_file.name} is missing or empty; the pinned upstream "
-            f"revision is unrecorded"
-        )
-    elif not re.fullmatch(r"[0-9a-f]{40}", recorded_commit):
-        warnings.append(
-            f"{args.commit_file.name} does not contain a full 40-character SHA"
-        )
+    recorded_commit, digest_manifest, commit_warnings = read_provenance(args.commit_file)
+    warnings.extend(commit_warnings)
+
+    # When the provenance file carries per-file digests (the case when upstream
+    # arrived as an archive rather than a clone), the digests are the pin: check
+    # the reference checkout still matches what was recorded.
+    for r in results:
+        recorded = digest_manifest.get(r.module)
+        if recorded and r.upstream_sha and recorded != r.upstream_sha:
+            r.problems.append(
+                f"upstream checkout does not match the digest recorded in "
+                f"{args.commit_file.name} (recorded {recorded[:16]}…, "
+                f"found {r.upstream_sha[:16]}…)"
+            )
+            if r.status == "ok":
+                r.status = "unapproved"
 
     failures = [r for r in results if r.failed and r.required]
     reference_failures = [r for r in results if r.failed and not r.required]
