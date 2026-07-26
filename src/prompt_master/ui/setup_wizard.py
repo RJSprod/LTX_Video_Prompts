@@ -11,7 +11,8 @@ from prompt_master.core.config import atomic_write_json
 from prompt_master.core.models import PromptRequest
 from prompt_master.core.paths import AppPaths
 from prompt_master.imaging.preprocess import image_data_url
-from prompt_master.inference.device_detection import detect_gpus, recommended_quantization
+from prompt_master.inference.device_detection import (detect_gpus, recommended_quantization,
+    runtime_component_id, list_llama_devices)
 from prompt_master.inference.service import InferenceService
 from prompt_master.prompt_engine.adapter import PromptEngine
 from prompt_master.provisioning.downloader import download
@@ -79,20 +80,21 @@ class SetupWizard(QWizard):
     def _provision(self):
         manifest_path=Path(__file__).resolve().parents[1]/"release-manifest.json"
         components=load_manifest(manifest_path); quant=self.quant.currentText(); gpu=self.gpu.currentData()
-        ids=("llama-runtime",f"model-{quant}","mmproj")
+        ids=(runtime_component_id(gpu),f"model-{quant}","mmproj")
         if any(key not in components for key in ids): raise RuntimeError(f"Release manifest has no complete {quant} component set")
         installed={}
         for number,key in enumerate(ids):
             component=components[key]; target=self.paths.contained(component.destination); self.install_status.setText(f"Downloading {key}…")
             self.progress.setValue(number*30)
             artifact=download(component,target,lambda done,total,n=number:self.progress.setValue(n*30+int(30*done/total)))
-            if key == "llama-runtime" and artifact.suffix.casefold()==".zip":
+            if key.startswith("llama-runtime-") and artifact.suffix.casefold()==".zip":
                 runtime_dir=self.paths.root/"runtime"; extract_zip_atomic(artifact,runtime_dir)
                 matches=list(runtime_dir.rglob("llama-server.exe"));
                 if not matches: raise RuntimeError("Runtime archive contains no llama-server.exe")
                 installed["runtime"]=matches[0].relative_to(self.paths.root).as_posix()
             else: installed["model" if key.startswith("model-") else "mmproj"]=artifact.relative_to(self.paths.root).as_posix()
-        state={**installed,"gpu_index":gpu.physical_index,"gpu_uuid":gpu.uuid,"gpu_name":gpu.name,"gpu_device":"CUDA0","quantization":quant,"context_size":8192}
+        device, device_name = list_llama_devices(self.paths.contained(installed["runtime"]), gpu.physical_index)
+        state={**installed,"gpu_index":gpu.physical_index,"gpu_uuid":gpu.uuid,"gpu_name":gpu.name,"gpu_device":device,"gpu_device_name":device_name,"quantization":quant,"context_size":16384}
         atomic_write_json(self.paths.data/"setup-state.pending.json",state)
         shutil.copy2(self.paths.data/"setup-state.pending.json",self.paths.data/"setup-state.json")
         service=InferenceService(self.paths)
