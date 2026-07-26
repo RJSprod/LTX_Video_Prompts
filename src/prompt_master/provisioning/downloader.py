@@ -14,7 +14,7 @@ def download(component: Component, destination: Path, progress: Callable[[int, i
     if destination.is_file():
         try:
             verify(destination, component.size, component.sha256)
-            if progress: progress(component.size, component.size)
+            if progress: progress(component.size or destination.stat().st_size, component.size or destination.stat().st_size)
             return destination
         except (OSError, ValueError):
             destination.unlink(missing_ok=True)
@@ -30,6 +30,6 @@ def download(component: Component, destination: Path, progress: Callable[[int, i
                 done = existing
                 for chunk in response.iter_bytes(1024 * 1024):
                     stream.write(chunk); done += len(chunk)
-                    if progress: progress(done, component.size)
+                    if progress: progress(done, component.size or max(done, 1))
                 stream.flush(); os.fsync(stream.fileno())
     verify(partial, component.size, component.sha256); os.replace(partial, destination); return destination

@@ -16,7 +16,7 @@ from prompt_master.inference.device_detection import (detect_gpus, recommended_q
 from prompt_master.inference.service import InferenceService
 from prompt_master.prompt_engine.adapter import PromptEngine
 from prompt_master.provisioning.downloader import download
-from prompt_master.provisioning.extractor import extract_zip_atomic
+from prompt_master.provisioning.extractor import extract_zips_atomic
 from prompt_master.provisioning.manifest import load_manifest
 
 
@@ -40,7 +40,7 @@ class SetupWizard(QWizard):
 
     def _model_page(self):
         page=QWizardPage(); page.setTitle("Model quality"); form=QFormLayout(page)
-        self.quant=QComboBox(); self.quant.addItems(["Q4_K_M", "Q6_K_P", "Q8_0"]); self.recommendation=QLabel(); self.recommendation.setWordWrap(True)
+        self.quant=QComboBox(); self.quant.addItems(["Q4_K_M", "Q6_K_P", "Q8_K_P"]); self.recommendation=QLabel(); self.recommendation.setWordWrap(True)
         form.addRow("GGUF quantization",self.quant); form.addRow(self.recommendation); self.addPage(page)
 
     def _install_page(self):
@@ -80,19 +80,22 @@ class SetupWizard(QWizard):
     def _provision(self):
         manifest_path=Path(__file__).resolve().parents[1]/"release-manifest.json"
         components=load_manifest(manifest_path); quant=self.quant.currentText(); gpu=self.gpu.currentData()
-        ids=(runtime_component_id(gpu),f"model-{quant}","mmproj")
+        runtime_id=runtime_component_id(gpu)
+        ids=(runtime_id,f"{runtime_id}-cudart",f"model-{quant}","mmproj")
         if any(key not in components for key in ids): raise RuntimeError(f"Release manifest has no complete {quant} component set")
         installed={}
+        runtime_archives=[]
         for number,key in enumerate(ids):
             component=components[key]; target=self.paths.contained(component.destination); self.install_status.setText(f"Downloading {key}…")
-            self.progress.setValue(number*30)
-            artifact=download(component,target,lambda done,total,n=number:self.progress.setValue(n*30+int(30*done/total)))
-            if key.startswith("llama-runtime-") and artifact.suffix.casefold()==".zip":
-                runtime_dir=self.paths.root/"runtime"; extract_zip_atomic(artifact,runtime_dir)
-                matches=list(runtime_dir.rglob("llama-server.exe"));
-                if not matches: raise RuntimeError("Runtime archive contains no llama-server.exe")
-                installed["runtime"]=matches[0].relative_to(self.paths.root).as_posix()
+            self.progress.setValue(number*22)
+            artifact=download(component,target,lambda done,total,n=number:self.progress.setValue(n*22+int(22*done/total)))
+            if key.startswith("llama-runtime-"):
+                runtime_archives.append(artifact)
             else: installed["model" if key.startswith("model-") else "mmproj"]=artifact.relative_to(self.paths.root).as_posix()
+        runtime_dir=self.paths.root/"runtime"; extract_zips_atomic(runtime_archives,runtime_dir)
+        matches=list(runtime_dir.rglob("llama-server.exe"))
+        if not matches: raise RuntimeError("Combined runtime archives contain no llama-server.exe")
+        installed["runtime"]=matches[0].relative_to(self.paths.root).as_posix()
         device, device_name = list_llama_devices(self.paths.contained(installed["runtime"]), gpu.physical_index)
         state={**installed,"gpu_index":gpu.physical_index,"gpu_uuid":gpu.uuid,"gpu_name":gpu.name,"gpu_device":device,"gpu_device_name":device_name,"quantization":quant,"context_size":16384}
         atomic_write_json(self.paths.data/"setup-state.pending.json",state)
