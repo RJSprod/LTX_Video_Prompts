@@ -15,6 +15,10 @@ class LlamaProcess:
         log_path.parent.mkdir(parents=True, exist_ok=True); self._log = log_path.open("a", encoding="utf-8")
         self.process = subprocess.Popen(command, env=env, stdout=self._log, stderr=subprocess.STDOUT, creationflags=getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0)|getattr(subprocess,"CREATE_NO_WINDOW",0))
 
+    @property
+    def running(self) -> bool:
+        return self.process is not None and self.process.poll() is None
+
     def wait_ready(self, timeout: float = 180) -> None:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:

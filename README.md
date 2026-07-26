@@ -6,4 +6,8 @@ Windows Qt desktop client which provisions a pinned `llama.cpp`/Gemma runtime an
 
 Requires Python 3.12. Create a development virtual environment, install with `pip install -e .`, and run `prompt-master`. The release build is produced on Windows with `build/build.ps1`; it uses `pyside6-deploy` in directory mode and Inno Setup.
 
-The checked-in release manifest intentionally rejects incomplete component metadata. Runtime archive and projector size metadata must be filled with values from the release publisher before a production build.
+The application owns one `llama-server` process and stops it on exit. Generation streams the positive prompt, creates the full base negative prompt, and optionally asks the model for scene-specific negative terms. Attached images are EXIF-normalized, converted to RGB, resized to 768 pixels, JPEG encoded, and sent in the same multimodal request as the text.
+
+## Release manifest
+
+Production builds must include `src/prompt_master/release-manifest.json`. Each entry is immutable and contains `component_id`, a version-pinned HTTPS `url`, exact `size`, SHA-256, `destination`, and `version`. Required IDs are `llama-runtime`, `model-Q4_K_M`, `model-Q6_K_P`, `model-Q8_0`, and `mmproj`. The setup wizard rejects missing, zero-size, malformed, or `latest` entries rather than downloading an unverified artifact. Publisher-controlled model artifacts are deliberately not represented by fabricated hashes.
