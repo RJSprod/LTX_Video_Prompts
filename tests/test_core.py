@@ -6,6 +6,8 @@ from prompt_master.core.config import atomic_write_json, read_json
 from prompt_master.core.models import PromptRequest
 from prompt_master.imaging.preprocess import image_data_url
 from prompt_master.inference.sse import assistant_chunks
+from prompt_master.inference.device_detection import runtime_component_id
+from prompt_master.core.models import GpuInfo
 from prompt_master.prompt_engine.adapter import PromptEngine
 from prompt_master.provisioning.extractor import extract_zip_atomic
 
@@ -31,3 +33,9 @@ def test_zip_slip_rejected(tmp_path):
     archive=tmp_path/"bad.zip"
     with zipfile.ZipFile(archive,"w") as z: z.writestr("../escape",b"bad")
     with pytest.raises(ValueError): extract_zip_atomic(archive,tmp_path/"out")
+
+
+def test_gpu_runtime_mapping_is_generation_specific():
+    gpu=lambda name: GpuInfo(0,"uuid",name,24576,20000,"1")
+    assert runtime_component_id(gpu("NVIDIA GeForce RTX 3090")) == "llama-runtime-cuda12"
+    assert runtime_component_id(gpu("NVIDIA GeForce RTX 5090")) == "llama-runtime-cuda13"

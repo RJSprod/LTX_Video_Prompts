@@ -1,5 +1,14 @@
 # Prompt Master Standalone
 
+## Install and generate
+
+1. Download **PromptMasterSetup.exe** from [GitHub Releases](https://github.com/RJSprod/LTX_Video_Prompts/releases).
+2. Run it.
+3. Choose the installation folder, GPU, and model.
+4. Wait for the verified downloads and text/image validation to finish.
+5. Enter text or attach an image.
+6. Generate positive and negative prompts.
+
 Windows Qt desktop client which provisions a pinned `llama.cpp`/Gemma runtime and creates LTX-Video 2.3 prompts. Models and runtimes remain beneath the user-selected installation root.
 
 ## Development

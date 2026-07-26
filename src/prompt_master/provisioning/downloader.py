@@ -11,6 +11,13 @@ from .verifier import verify
 
 def download(component: Component, destination: Path, progress: Callable[[int, int], None] | None = None) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True); partial = destination.with_name(destination.name + ".part")
+    if destination.is_file():
+        try:
+            verify(destination, component.size, component.sha256)
+            if progress: progress(component.size, component.size)
+            return destination
+        except (OSError, ValueError):
+            destination.unlink(missing_ok=True)
     existing = partial.stat().st_size if partial.exists() else 0
     headers = {"Range": f"bytes={existing}-"} if existing else {}
     with httpx.Client(follow_redirects=True, timeout=httpx.Timeout(600, connect=30)) as client:
